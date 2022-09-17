@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Project - Deploying An Apache Server On An EC2 Instance
+
+Parameters:
+    EnvironmentName:
+        Description: The Name That Will Be Prefixed To Names Of Resources 
+        Type: String
+    
+    WebsiteStorageBucketName:
+        Description: The Name Of The S3 Bucket That Contains The Website Files
+        Type: String
+
+    WebsiteStorageBucketARN:
+        Description: The ARN Of The S3 Bucket That Contains The Website Files
+        Type: String
+    
+    NumEC2Instances:
+        Description: The Number Of EC2 Instances That Should Be Spun Up. String.
+        Type: String
+Resources:
+    ApacheServersAutoScalingGroup:
+        Type: AWS::AutoScaling::AutoScalingGroup
+        Properties:
+            VPCZoneIdentifier:
+                - !Ref PrivateSubnetA
+                - !Ref PrivateSubnetB
+            LaunchConfigurationName: !Ref EC2InstanceConfig
+            MinSize: !Ref NumEC2Instances
+            MaxSize: !Ref NumEC2Instances
+            HealthCheckGracePeriod: 100
+            HealthCheckType: ELB
+            TargetGroupARNs:
+                - !Ref ApacheServersTargetGroup
+
+    EC2InstanceConfig:
+        Type: AWS::AutoScaling::LaunchConfiguration
+        Properties:
+            ImageId: ami-0729e439b6769d6ab
+            InstanceType: t2.medium
+            IamInstanceProfile: !Ref EC2InstanceProfile
+            SecurityGroups:
+                - !Ref SecurityGroup
+            UserData:
+                Fn::Base64:
+                    !Sub |
+                        #!/bin/bash
+                        apt-get update  -y
+                        apt-get install -y awscli
+
+                        apt-get update  -y
+                        apt-get install -y apache2
+                        systemctl start  apache2.service
+                        systemctl enable apache2.service
+                        cd /var/www/html
+                        rm index.html
+                        aws s3 cp s3://${!Ref WebsiteStorageBucketName} . --recursive
+
+    EC2InstanceProfile:
+        Type: AWS::IAM::InstanceProfile
+        Properties:
+            Path: /
+            Roles:
+                - !Ref ReadS3BucketRole
+
+    ReadS3BucketPolicy:
+        Type: AWS::IAM::Policy
+        Properties:
+            PolicyName: !Join ["-", [!Ref EnvironmentName, "Instances-Read-S3-Buckets-Policy"]]
+            PolicyDocument:
+                Statement:
+                    - Effect: Allow
+                      Action:
+                        - s3:GetObject
+                        - s3:ListBucket
+                      Resource:
+                        - !Ref WebsiteStorageBucketARN
+            Roles:
+                - !Ref ReadS3BucketRole
+
+    ReadS3BucketRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                        Service:
+                            - ec2.amazonaws.com
+                      Action:
+                        - sts:AssumeRole
+            Path: /
+
+    SecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Join ["-", [!Ref EnvironmentName, Security-Group]]
+            GroupDescription: Allow Inbound HTTP Traffic On Port 80, And All Outbound Traffic
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 0
+                  ToPort: 65535
+                  CidrIp: 0.0.0.0/0
+    
+    ApacheServersTargetGroup:
+        Type: AWS::ElasticLoadBalancingV2::TargetGroup
+        Properties:
+            HealthCheckIntervalSeconds: 30
+            HealthCheckPath: /
+            HealthCheckProtocol: HTTP
+            HealthCheckTimeoutSeconds: 8
+            HealthyThresholdCount: 2
+            Port: 80
+            Protocol: HTTP
+            UnhealthyThresholdCount: 5
+            VpcId: !Ref VPC 
+
+
+    LBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupName: !Join ["-", [!Ref EnvironmentName, Load-Balancer-Security-Group]]
+            GroupDescription: Allow Inbound and Outbound HTTP Traffic On Port 80
+            VpcId: !Ref VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+            SecurityGroupEgress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+
+    LoadBalancer:
+        Type: AWS::ElasticLoadBalancingV2::LoadBalancer 
+        Properties:
+            Subnets:
+                - !Ref PublicSubnetA
+                - !Ref PublicSubnetB
+            SecurityGroups:
+                - !Ref LBSecurityGroup
+
+    Listener:
+        Type: AWS::ElasticLoadBalancingV2::Listener
+        Properties:
+            DefaultActions:
+                - Type: forward
+                  TargetGroupArn: !Ref ApacheServersTargetGroup
+            LoadBalancerArn: !Ref LoadBalancer
+            Port: '80'
+            Protocol: HTTP
+    
+    ListenerRule:
+        Type: AWS::ElasticLoadBalancingV2::ListenerRule
+        Properties:
+            Actions:
+                - Type: forward
+                  TargetGroupArn: !Ref ApacheServersTargetGroup
+            Conditions:
+                - Field: path-pattern
+                  Values: [/]
+            ListenerArn: !Ref Listener
+            Priority: 1      
+
+    VPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.0.0.0/16
+            EnableDnsSupport: true 
+            EnableDnsHostnames: true
+            InstanceTenancy: default 
+    
+    InternetGateway:
+        Type: AWS::EC2::InternetGateway 
+
+    VPCGateWayAttachment:
+        Type: AWS::EC2::VPCGatewayAttachment
+        Properties:
+            VpcId: !Ref VPC
+            InternetGatewayId: !Ref InternetGateway
+
+    NatGatewayAEIP:
+        Type: AWS::EC2::EIP
+        DependsOn: VPCGateWayAttachment
+        Properties:
+            Domain: vpc
+    
+    NatGatewayA:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGatewayAEIP.AllocationId
+            SubnetId: !Ref PublicSubnetA 
+
+    NatGatewayBEIP:
+        Type: AWS::EC2::EIP
+        DependsOn: VPCGateWayAttachment
+        Properties:
+            Domain: vpc
+
+    NatGatewayB:
+        Type: AWS::EC2::NatGateway
+        Properties:
+            AllocationId: !GetAtt NatGatewayBEIP.AllocationId
+            SubnetId: !Ref PublicSubnetB 
+
+    PublicSubnetA:
+        Type: AWS::EC2::Subnet 
+        Properties:
+            AvailabilityZone: us-east-1a
+            VpcId: !Ref VPC 
+            CidrBlock: 10.0.0.0/24 
+            MapPublicIpOnLaunch: true 
+
+    PublicSubnetB:
+        Type: AWS::EC2::Subnet 
+        Properties:
+            AvailabilityZone: us-east-1b
+            VpcId: !Ref VPC 
+            CidrBlock: 10.0.1.0/24 
+            MapPublicIpOnLaunch: true
+     
+    PrivateSubnetA:
+        Type: AWS::EC2::Subnet 
+        Properties:
+            AvailabilityZone: us-east-1a
+            VpcId: !Ref VPC 
+            CidrBlock: 10.0.2.0/24 
+            MapPublicIpOnLaunch: true
+
+    PrivateSubnetB:
+        Type: AWS::EC2::Subnet 
+        Properties:
+            AvailabilityZone: us-east-1b
+            VpcId: !Ref VPC 
+            CidrBlock: 10.0.3.0/24 
+            MapPublicIpOnLaunch: true   
+
+    PublicRouteTable:
+        Type: AWS::EC2::RouteTable 
+        Properties:
+            VpcId: !Ref VPC
+
+    PublicInternetRoute:
+        Type: AWS::EC2::Route 
+        DependsOn: InternetGateway
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            GatewayId: !Ref InternetGateway 
+            RouteTableId: !Ref PublicRouteTable
+
+
+    PrivateRouteTableA:
+        Type: AWS::EC2::RouteTable 
+        Properties:
+            VpcId: !Ref VPC
+
+    PrivateInternetRouteA:
+        Type: AWS::EC2::Route
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGatewayA
+            RouteTableId: !Ref PrivateRouteTableA
+
+    PrivateRouteTableB:
+        Type: AWS::EC2::RouteTable 
+        Properties:
+            VpcId: !Ref VPC
+
+    PrivateInternetRouteB:
+        Type: AWS::EC2::Route
+        Properties:
+            DestinationCidrBlock: 0.0.0.0/0
+            NatGatewayId: !Ref NatGatewayB
+            RouteTableId: !Ref PrivateRouteTableB  
+
+    PrivateSubnetAPrivateRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateRouteTableA 
+            SubnetId: !Ref PrivateSubnetA 
+    
+    PrivateSubnetBPrivateRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PrivateRouteTableB 
+            SubnetId: !Ref PrivateSubnetB
+
+    PublicSubnetAPublicRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable 
+            SubnetId: !Ref PublicSubnetA
+    
+    PublicSubnetBPublicRouteTableAssociation:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+            RouteTableId: !Ref PublicRouteTable 
+            SubnetId: !Ref PublicSubnetB

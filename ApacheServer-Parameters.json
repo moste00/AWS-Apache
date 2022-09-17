@@ -1,0 +1,18 @@
+[
+    {
+        "ParameterKey": "EnvironmentName",
+		"ParameterValue": "My-Env"
+    },
+    {
+        "ParameterKey": "WebsiteStorageBucketName",
+		"ParameterValue": "udagram-files-storage"
+    },
+    {
+        "ParameterKey": "WebsiteStorageBucketARN",
+		"ParameterValue": "arn:aws:s3:::udagram-files-storage"
+    },
+    {
+        "ParameterKey": "NumEC2Instances",
+		"ParameterValue": "4"
+    }
+]
