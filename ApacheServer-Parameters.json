@@ -8,11 +8,15 @@
 		"ParameterValue": "udagram-files-storage"
     },
     {
-        "ParameterKey": "WebsiteStorageBucketARN",
-		"ParameterValue": "arn:aws:s3:::udagram-files-storage"
-    },
-    {
         "ParameterKey": "NumEC2Instances",
 		"ParameterValue": "4"
+    },
+    {
+        "ParameterKey": "EC2InstanceType",
+		"ParameterValue": "t3.medium"   
+    },
+    {
+        "ParameterKey": "ExtraStorageGBs",
+		"ParameterValue": "10"      
     }
 ]

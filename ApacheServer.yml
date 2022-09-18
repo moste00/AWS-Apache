@@ -9,14 +9,32 @@ Parameters:
     WebsiteStorageBucketName:
         Description: The Name Of The S3 Bucket That Contains The Website Files
         Type: String
-
-    WebsiteStorageBucketARN:
-        Description: The ARN Of The S3 Bucket That Contains The Website Files
-        Type: String
     
     NumEC2Instances:
-        Description: The Number Of EC2 Instances That Should Be Spun Up. String.
+        Description: The Number Of EC2 Instances That Should Be Spun Up.
         Type: String
+        AllowedPattern: "[1-9][0-9]?"
+        ConstraintDescription: Number of EC2 instances must be between 1 and 99. Numbers between 1 and 9 are specified as a single digit.
+
+    ExtraStorageGBs:
+        Description: The Number Of Extra GigaBytes Each EC2 Instance Will Get In Addition To The Core Storage.
+        Type: String
+        AllowedPattern: "[1-9][0-9]?[0-9]?"
+        ConstraintDescription: Extra storage should be a number between 1 and 999. Numbers between 1 and 9 are specified as a single digit. Numbers between 10 and 99 are specified as 2 digits.
+
+    EC2InstanceType:
+        Description: The Grade Of The EC2 Instance Used. Only EC2 Instances With 2 vCPUs And At Least 4GB Of RAM Are Allowed.
+        Type: String
+        AllowedValues:
+            - t2.medium
+            - t2.large
+            - t2.xlarge
+            - t2.2xlarge
+            - t3.medium
+            - t3.large
+            - t3.xlarge
+            - t3.2xlarge
+
 Resources:
     ApacheServersAutoScalingGroup:
         Type: AWS::AutoScaling::AutoScalingGroup
@@ -36,24 +54,32 @@ Resources:
         Type: AWS::AutoScaling::LaunchConfiguration
         Properties:
             ImageId: ami-0729e439b6769d6ab
-            InstanceType: t2.medium
+            InstanceType: !Ref EC2InstanceType
             IamInstanceProfile: !Ref EC2InstanceProfile
             SecurityGroups:
                 - !Ref SecurityGroup
+            BlockDeviceMappings:
+                - DeviceName: /dev/sdk
+                  Ebs:
+                    VolumeSize: !Ref ExtraStorageGBs
             UserData:
-                Fn::Base64:
-                    !Sub |
-                        #!/bin/bash
-                        apt-get update  -y
-                        apt-get install -y awscli
-
-                        apt-get update  -y
-                        apt-get install -y apache2
-                        systemctl start  apache2.service
-                        systemctl enable apache2.service
-                        cd /var/www/html
-                        rm index.html
-                        aws s3 cp s3://${!Ref WebsiteStorageBucketName} . --recursive
+                Fn::Base64: 
+                    !Join 
+                        - "\n"
+                        - - "#!/bin/bash"
+                          - "apt-get update  -y"
+                          - "apt-get install -y awscli"
+                          - "apt-get update  -y"
+                          - "apt-get install -y apache2"
+                          - "systemctl start  apache2.service"
+                          - "systemctl enable apache2.service"
+                          - "cd /var/www/html"
+                          - "rm index.html"
+                          - !Join 
+                                - ""
+                                - - "aws s3 cp s3://"
+                                  - !Ref WebsiteStorageBucketName
+                                  - " . --recursive"
 
     EC2InstanceProfile:
         Type: AWS::IAM::InstanceProfile
@@ -73,7 +99,8 @@ Resources:
                         - s3:GetObject
                         - s3:ListBucket
                       Resource:
-                        - !Ref WebsiteStorageBucketARN
+                        - !Join ["", ["arn:aws:s3:::",!Ref WebsiteStorageBucketName]]
+                        - !Join ["", [!Join ["", ["arn:aws:s3:::",!Ref WebsiteStorageBucketName]],"/*"]]
             Roles:
                 - !Ref ReadS3BucketRole
 
@@ -304,3 +331,9 @@ Resources:
         Properties:
             RouteTableId: !Ref PublicRouteTable 
             SubnetId: !Ref PublicSubnetB
+
+
+Outputs:
+    UdagramURL:
+        Description: This Is The URL Of The Website, Try It In Any Browser !
+        Value: !Join ["", ["http://",!GetAtt LoadBalancer.DNSName]]
