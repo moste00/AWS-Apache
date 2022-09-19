@@ -337,3 +337,5 @@ Outputs:
     UdagramURL:
         Description: This Is The URL Of The Website, Try It In Any Browser !
         Value: !Join ["", ["http://",!GetAtt LoadBalancer.DNSName]]
+        Export:
+            Name: !Sub "${AWS::StackName}-Stack-Udagram-URL"

@@ -5,7 +5,7 @@
     },
     {
         "ParameterKey": "WebsiteStorageBucketName",
-		"ParameterValue": "udagram-files-storage"
+		"ParameterValue": "udagram-files-storage-kv"
     },
     {
         "ParameterKey": "NumEC2Instances",
