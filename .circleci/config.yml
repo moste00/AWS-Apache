@@ -37,9 +37,9 @@ jobs:
     
     steps:
       - attach_workspace:
-          at: /my/workspace
+          at: /workspace
 
-      - run: cat /my/workspace/file.txt
+      - run: cat /workspace/file.txt
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
