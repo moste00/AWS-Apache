@@ -22,16 +22,33 @@ jobs:
           command: "echo Hello, World!"
       - run:
           name: "create a file"
-          command: echo "Hello File " > file.txt
+          command: mkdir files ; echo "Hello File " > file.txt
       - run:
           name: "show contents of just created file"
           command: cat file.txt
       - run:
           name: "show name of user"
           command: echo $USER_NAME
+      - persist_to_workspace:
+          root: files
+          paths:
+            - file.txt
+
+  read-hello:
+    docker:
+      - image: cimg/base:stable
+    
+    steps:
+      - attach_workspace:
+          at: /my/workspace
+
+      - run: cat /my/workspace/file.txt
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
   say-hello-workflow:
     jobs:
       - say-hello
+      - read-hello
+        requires:
+         - say-hello 
