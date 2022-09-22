@@ -51,7 +51,7 @@ jobs:
     docker:
      - image: circleci/node:13.8.0
 
-     steps:
+    steps:
       - name: "will fail"
         command: cat doesNotExist.txt
 
