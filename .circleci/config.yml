@@ -22,7 +22,7 @@ jobs:
           command: "echo Hello, World!"
       - run:
           name: "create a file"
-          command: mkdir files ; echo "Hello File " > file.txt
+          command: mkdir files ; echo "Hello File " > file.txt ; mv file.txt ./files/file.txt ; ls -a
       - run:
           name: "show contents of just created file"
           command: cat file.txt
