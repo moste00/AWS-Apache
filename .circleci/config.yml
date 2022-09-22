@@ -10,6 +10,9 @@ jobs:
     # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
     docker:
       - image: cimg/base:stable
+    
+    environment:
+      USER_NAME: Mostafa M. Kamal
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
@@ -22,8 +25,10 @@ jobs:
           command: echo "Hello File " > file.txt
       - run:
           name: "show contents of just created file"
-          command: "cat file.txt"
-
+          command: cat file.txt
+      - run:
+          name: "show name of user"
+          command: echo $USER_NAME
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
