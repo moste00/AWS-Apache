@@ -52,12 +52,14 @@ jobs:
      - image: circleci/node:13.8.0
 
     steps:
-      - name: "will fail"
-        command: cat doesNotExist.txt
+      - run:
+          name: "will fail"
+          command: cat doesNotExist.txt
 
-      - name: "handle failure"
-        when: on_fail
-        command: "Ooopsie! It looks like you're trying to access a non-existent file :)"
+      - run:
+          name: "handle failure"
+          when: on_fail
+          command: "Ooopsie! It looks like you're trying to access a non-existent file :)"
 # Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
