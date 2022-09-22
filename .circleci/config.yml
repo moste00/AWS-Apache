@@ -67,3 +67,4 @@ workflows:
       - read-hello:
           requires:
             - say-hello 
+      - always-fail
